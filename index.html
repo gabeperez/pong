@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyberpunk Pong</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000000;
+            font-family: 'Courier New', monospace;
+            color: #00ffff;
+        }
+        #gameCanvas {
+            border: 2px solid #ff00ff;
+            box-shadow: 0 0 20px #ff00ff, 0 0 30px #00ffff;
+        }
+        .button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #ff00ff;
+            color: #000000;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 0 10px #ff00ff;
+            transition: all 0.3s ease;
+        }
+        .button:hover {
+            background-color: #00ffff;
+            box-shadow: 0 0 20px #00ffff;
+        }
+        #controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        #modeControls {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="modeControls">
+        <button id="aiModeButton" class="button">AI Mode</button>
+        <button id="twoPlayerModeButton" class="button">Two Player Mode</button>
+    </div>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div id="controls">
+        <button id="resetButton" class="button">Reset Ball</button>
+        <button id="pauseButton" class="button">Pause</button>
+        <button id="addBallButton" class="button">Add Ball</button>
+        <button id="restartButton" class="button">Restart Game</button>
+        <button id="reduceBallButton" class="button">Reduce Balls</button>
+        <button id="singleBallButton" class="button">Single Ball Game</button>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const resetButton = document.getElementById('resetButton');
+        const pauseButton = document.getElementById('pauseButton');
+        const addBallButton = document.getElementById('addBallButton');
+        const restartButton = document.getElementById('restartButton');
+        const reduceBallButton = document.getElementById('reduceBallButton');
+        const singleBallButton = document.getElementById('singleBallButton');
+        const aiModeButton = document.getElementById('aiModeButton');
+        const twoPlayerModeButton = document.getElementById('twoPlayerModeButton');
+
+        let isPaused = false;
+        let isAIMode = false;
+
+        // Game objects
+        let balls = [{
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 10,
+            dx: 5,
+            dy: 5,
+            color: '#00ffff'
+        }];
+
+        const paddleHeight = 100;
+        const paddleWidth = 10;
+
+        const leftPaddle = {
+            x: 0,
+            y: canvas.height / 2 - paddleHeight / 2,
+            width: paddleWidth,
+            height: paddleHeight,
+            dy: 5,
+            color: '#ff00ff'
+        };
+
+        const rightPaddle = {
+            x: canvas.width - paddleWidth,
+            y: canvas.height / 2 - paddleHeight / 2,
+            width: paddleWidth,
+            height: paddleHeight,
+            dy: 5,
+            color: '#ffff00'
+        };
+
+        // Keyboard controls
+        const keys = {};
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Sound effects using Web Audio API
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(frequency, duration, type = 'sine') {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function playHitSound() {
+            playSound(440, 0.1, 'square');
+        }
+
+        function playScoreSound() {
+            playSound(660, 0.2);
+        }
+
+        function drawRect(x, y, width, height, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, width, height);
+        }
+
+        function drawCircle(x, y, radius, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2, false);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawScore(leftScore, rightScore) {
+            ctx.fillStyle = '#00ffff';
+            ctx.font = '30px "Courier New"';
+            ctx.fillText(leftScore, canvas.width / 4, 50);
+            ctx.fillText(rightScore, 3 * canvas.width / 4, 50);
+        }
+
+        function movePaddles() {
+            if (keys['w'] && leftPaddle.y > 0) {
+                leftPaddle.y -= leftPaddle.dy;
+            }
+            if (keys['s'] && leftPaddle.y < canvas.height - leftPaddle.height) {
+                leftPaddle.y += leftPaddle.dy;
+            }
+            if (!isAIMode) {
+                if (keys['ArrowUp'] && rightPaddle.y > 0) {
+                    rightPaddle.y -= rightPaddle.dy;
+                }
+                if (keys['ArrowDown'] && rightPaddle.y < canvas.height - rightPaddle.height) {
+                    rightPaddle.y += rightPaddle.dy;
+                }
+            }
+        }
+
+        function moveAI() {
+            const aiSpeed = 5 + Math.min(rightScore, 10); // AI speed increases with score, max +10
+            const targetY = balls[0].y - (rightPaddle.height / 2);
+            if (rightPaddle.y < targetY - aiSpeed) {
+                rightPaddle.y += aiSpeed;
+            } else if (rightPaddle.y > targetY + aiSpeed) {
+                rightPaddle.y -= aiSpeed;
+            }
+            rightPaddle.y = Math.max(0, Math.min(canvas.height - rightPaddle.height, rightPaddle.y));
+        }
+
+        function collision(b, p) {
+            return b.x + b.radius > p.x && b.x - b.radius < p.x + p.width &&
+                   b.y + b.radius > p.y && b.y - b.radius < p.y + p.height;
+        }
+
+        let leftScore = 0;
+        let rightScore = 0;
+
+        function update() {
+            if (isPaused) return;
+
+            // Move the balls
+            balls.forEach(ball => {
+                ball.x += ball.dx;
+                ball.y += ball.dy;
+
+                // Wall collision (top and bottom)
+                if (ball.y + ball.radius > canvas.height || ball.y - ball.radius < 0) {
+                    ball.dy *= -1;
+                    playHitSound();
+                }
+
+                // Paddle collision
+                if (collision(ball, leftPaddle) || collision(ball, rightPaddle)) {
+                    let paddle = (ball.x < canvas.width / 2) ? leftPaddle : rightPaddle;
+                    let collidePoint = (ball.y - (paddle.y + paddle.height / 2)) / (paddle.height / 2);
+                    let angleRad = (Math.PI / 4) * collidePoint;
+                    let direction = (ball.x < canvas.width / 2) ? 1 : -1;
+                    ball.dx = direction * 5 * Math.cos(angleRad);
+                    ball.dy = 5 * Math.sin(angleRad);
+                    playHitSound();
+                }
+
+                // Score points
+                if (ball.x - ball.radius < 0) {
+                    rightScore++;
+                    playScoreSound();
+                    resetBall(ball);
+                } else if (ball.x + ball.radius > canvas.width) {
+                    leftScore++;
+                    playScoreSound();
+                    resetBall(ball);
+                }
+            });
+
+            movePaddles();
+            if (isAIMode) {
+                moveAI();
+            }
+        }
+
+        function resetBall(ball) {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.dx = 5 * (Math.random() > 0.5 ? 1 : -1);
+            ball.dy = 5 * (Math.random() > 0.5 ? 1 : -1);
+        }
+
+        function draw() {
+            // Clear the canvas
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw game objects
+            drawRect(leftPaddle.x, leftPaddle.y, leftPaddle.width, leftPaddle.height, leftPaddle.color);
+            drawRect(rightPaddle.x, rightPaddle.y, rightPaddle.width, rightPaddle.height, rightPaddle.color);
+            balls.forEach(ball => drawCircle(ball.x, ball.y, ball.radius, ball.color));
+            drawScore(leftScore, rightScore);
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        resetButton.addEventListener('click', () => {
+            balls.forEach(resetBall);
+        });
+
+        pauseButton.addEventListener('click', () => {
+            isPaused = !isPaused;
+            pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
+        });
+
+        addBallButton.addEventListener('click', () => {
+            const newBall = {
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                radius: 10,
+                dx: 5 * (Math.random() > 0.5 ? 1 : -1),
+                dy: 5 * (Math.random() > 0.5 ? 1 : -1),
+                color: `rgb(${Math.random()*255},${Math.random()*255},${Math.random()*255})`
+            };
+            balls.push(newBall);
+        });
+
+        restartButton.addEventListener('click', () => {
+            leftScore = 0;
+            rightScore = 0;
+            balls = [{
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                radius: 10,
+                dx: 5,
+                dy: 5,
+                color: '#00ffff'
+            }];
+            leftPaddle.y = canvas.height / 2 - paddleHeight / 2;
+            rightPaddle.y = canvas.height / 2 - paddleHeight / 2;
+            isPaused = false;
+            pauseButton.textContent = 'Pause';
+        });
+
+        reduceBallButton.addEventListener('click', () => {
+            if (balls.length > 1) {
+                balls.pop();
+            }
+        });
+
+        singleBallButton.addEventListener('click', () => {
+            balls = [balls[0]];
+            resetBall(balls[0]);
+        });
+
+        aiModeButton.addEventListener('click', () => {
+            isAIMode = true;
+            aiModeButton.style.backgroundColor = '#00ffff';
+            twoPlayerModeButton.style.backgroundColor = '#ff00ff';
+        });
+
+        twoPlayerModeButton.addEventListener('click', () => {
+            isAIMode = false;
+            aiModeButton.style.backgroundColor = '#ff00ff';
+            twoPlayerModeButton.style.backgroundColor = '#00ffff';
+        });
+
+        gameLoop();
+    </script>
+</body>
+</html>
