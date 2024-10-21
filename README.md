@@ -24,6 +24,10 @@ Cyberpunk Pong is a modern reimagining of the classic Pong game with neon aesthe
 - **Player 2 (Right Paddle)** (Two Player Mode only):  
   - Move Up: `Arrow Up`  
   - Move Down: `Arrow Down`
+ 
+- **Touch Controls**:
+  - PLayer 1: `Left side of screen`  
+  - Player 2: `Right side of screen`
 
 ### Game Control Buttons
 - **AI Mode**: Activates AI opponent for Player 2.
